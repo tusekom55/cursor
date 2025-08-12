@@ -53,7 +53,6 @@ try {
     if (login_user($username, $password)) {
         // Session'ı güçlendir
         $_SESSION['last_activity'] = time();
-        $_SESSION['login_time'] = time();
         
         echo json_encode([
             'success' => true, 
@@ -74,19 +73,7 @@ try {
     error_log('Login error: ' . $e->getMessage());
     echo json_encode([
         'success' => false, 
-        'message' => 'Giriş işlemi sırasında bir hata oluştu: ' . $e->getMessage()
-    ]);
-} catch (PDOException $e) {
-    error_log('Database error: ' . $e->getMessage());
-    echo json_encode([
-        'success' => false, 
-        'message' => 'Veritabanı bağlantı hatası'
-    ]);
-} catch (Error $e) {
-    error_log('PHP error: ' . $e->getMessage());
-    echo json_encode([
-        'success' => false, 
-        'message' => 'Sistem hatası'
+        'message' => 'Giriş işlemi sırasında bir hata oluştu'
     ]);
 }
 ?> 

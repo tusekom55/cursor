@@ -44,25 +44,15 @@ function login_user($username, $password) {
     try {
         $conn = db_connect();
         
-        // Kullanıcıyı bul (is_active kontrolü opsiyonel)
-        $stmt = $conn->prepare('SELECT id, password, role, balance, ad_soyad, is_active FROM users WHERE username = ?');
+        $stmt = $conn->prepare('SELECT id, password, role, balance, ad_soyad FROM users WHERE username = ? AND is_active = 1');
         $stmt->execute([$username]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($user && $password === $user['password']) {
-            // is_active kontrolü (eğer kolon varsa)
-            if (isset($user['is_active']) && $user['is_active'] != 1) {
-                error_log('Login attempt for inactive user: ' . $username);
-                return false;
-            }
-            
             // Session başlat
             if (session_status() === PHP_SESSION_NONE) {
                 session_start();
             }
-            
-            // Session'ı temizle ve yeniden oluştur
-            session_regenerate_id(true);
             
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role'] = $user['role'];
@@ -70,25 +60,14 @@ function login_user($username, $password) {
             $_SESSION['balance'] = $user['balance'];
             $_SESSION['ad_soyad'] = $user['ad_soyad'];
             $_SESSION['last_activity'] = time();
-            $_SESSION['login_time'] = time();
             
-            try {
-                // Son giriş zamanını güncelle
-                $update_stmt = $conn->prepare('UPDATE users SET son_giris = NOW(), ip_adresi = ? WHERE id = ?');
-                $update_stmt->execute([$_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $user['id']]);
-            } catch (Exception $e) {
-                error_log('Update last login error: ' . $e->getMessage());
-                // Bu hata login'i engellememeli
-            }
+            // Son giriş zamanını güncelle
+            $update_stmt = $conn->prepare('UPDATE users SET son_giris = NOW(), ip_adresi = ? WHERE id = ?');
+            $update_stmt->execute([$_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', $user['id']]);
             
-            try {
-                // Login log kaydı (eğer tablo varsa)
-                $log_stmt = $conn->prepare('INSERT INTO kullanici_islem_gecmisi (user_id, islem_tipi, islem_detayi, tutar, onceki_bakiye, sonraki_bakiye) VALUES (?, "login", "Kullanıcı giriş yaptı", 0, ?, ?)');
-                $log_stmt->execute([$user['id'], $user['balance'], $user['balance']]);
-            } catch (Exception $e) {
-                error_log('Login log error: ' . $e->getMessage());
-                // Bu hata login'i engellememeli
-            }
+            // Login log kaydı
+            $log_stmt = $conn->prepare('INSERT INTO kullanici_islem_gecmisi (user_id, islem_tipi, islem_detayi, tutar, onceki_bakiye, sonraki_bakiye) VALUES (?, "login", "Kullanıcı giriş yaptı", 0, ?, ?)');
+            $log_stmt->execute([$user['id'], $user['balance'], $user['balance']]);
             
             return true;
         }
@@ -96,10 +75,7 @@ function login_user($username, $password) {
         return false;
         
     } catch (PDOException $e) {
-        error_log('Login database error: ' . $e->getMessage());
-        return false;
-    } catch (Exception $e) {
-        error_log('Login general error: ' . $e->getMessage());
+        error_log('Login error: ' . $e->getMessage());
         return false;
     }
 }

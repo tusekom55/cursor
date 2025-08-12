@@ -39,9 +39,10 @@ try {
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($user) {
-        // Demo kullanıcı kontrolü - session'ı koru
+        // Demo kullanıcı kontrolü
         if ($user['username'] === 'demo' || $user['role'] === 'demo') {
-            // Demo kullanıcı tespit edildi - session'ı temizleme, sadece uyarı ver
+            // Demo kullanıcı tespit edildi - session'ı temizle
+            session_destroy();
             http_response_code(403);
             echo json_encode([
                 'success' => false, 

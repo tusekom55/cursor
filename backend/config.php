@@ -29,55 +29,40 @@ function db_connect() {
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
-            PDO::ATTR_TIMEOUT => 10, // 10 saniye timeout
-            PDO::MYSQL_ATTR_CONNECT_TIMEOUT => 10
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4"
         ];
         
         $conn = new PDO($dsn, $DB_USER, $DB_PASS, $options);
-        
-        // Bağlantıyı test et
-        $conn->query("SELECT 1");
-        
         return $conn;
         
     } catch (PDOException $e) {
+        // Production'da gerçek hata mesajını gösterme
         error_log('Database connection error: ' . $e->getMessage());
         
         // Test modu için detaylı hata, production'da generic mesaj
         if (defined('DEBUG_MODE') && DEBUG_MODE) {
-            throw new Exception('Veritabanı bağlantı hatası: ' . $e->getMessage());
+            die(json_encode(['error' => 'Veritabanı bağlantı hatası: ' . $e->getMessage()]));
         } else {
-            throw new Exception('Veritabanı bağlantısı kurulamadı');
+            die(json_encode(['error' => 'Veritabanı bağlantısı kurulamadı']));
         }
     }
 }
 
-// MySQLi bağlantı değişkeni (global kullanım için) - try-catch ile
-try {
-    $conn = new mysqli($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME);
-    
-    // Bağlantı kontrolü
-    if ($conn->connect_error) {
-        error_log('MySQLi connection error: ' . $conn->connect_error);
-        if (defined('DEBUG_MODE') && DEBUG_MODE) {
-            throw new Exception('MySQLi bağlantı hatası: ' . $conn->connect_error);
-        } else {
-            throw new Exception('Veritabanı bağlantısı kurulamadı');
-        }
+// MySQLi bağlantı değişkeni (global kullanım için)
+$conn = new mysqli($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME);
+
+// MySQLi bağlantı kontrolü
+if ($conn->connect_error) {
+    error_log('MySQLi connection error: ' . $conn->connect_error);
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        die(json_encode(['error' => 'MySQLi bağlantı hatası: ' . $conn->connect_error]));
+    } else {
+        die(json_encode(['error' => 'Veritabanı bağlantısı kurulamadı']));
     }
-    
-    // Timeout ayarları
-    $conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 10);
-    $conn->options(MYSQLI_OPT_READ_TIMEOUT, 10);
-    
-    // UTF-8 karakter seti ayarla
-    $conn->set_charset("utf8mb4");
-    
-} catch (Exception $e) {
-    error_log('MySQLi connection setup error: ' . $e->getMessage());
-    $conn = null; // Bağlantıyı null yap
 }
+
+// UTF-8 karakter seti ayarla
+$conn->set_charset("utf8mb4");
 
 // Debug modu (production'da false yapın)
 define('DEBUG_MODE', true); // Test için geçici olarak true

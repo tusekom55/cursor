@@ -20,17 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once '../config.php';
 
-// Session kontrolü - daha esnek
+// Session kontrolü
 if (!isset($_SESSION['user_id'])) {
-    // Debug modunda test kullanıcısı kullan
-    if (defined('DEBUG_MODE') && DEBUG_MODE) {
-        $_SESSION['user_id'] = 1;
-        $_SESSION['role'] = 'user';
-        $_SESSION['username'] = 'test_user';
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Oturum bulunamadı']);
-        exit;
-    }
+    echo json_encode(['success' => false, 'error' => 'Oturum bulunamadı']);
+    exit;
 }
 
 $user_id = $_SESSION['user_id'];
@@ -176,11 +169,8 @@ try {
             if ($result) {
                 $withdrawal_id = $pdo->lastInsertId();
                 
-                // Session'ı güçlendir - para çekme işleminden sonra
-                if (isset($_SESSION['user_id'])) {
-                    $_SESSION['last_activity'] = time();
-                    $_SESSION['last_withdrawal'] = time();
-                }
+                // Session'ı yenile - para çekme işleminden sonra
+                $_SESSION['last_activity'] = time();
                 
                 echo json_encode([
                     'success' => true, 
