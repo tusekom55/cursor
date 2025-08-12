@@ -97,6 +97,9 @@ switch ($action) {
         $stmt->execute([$withdrawal['user_id']]);
         $user_balance = $stmt->fetchColumn();
         
+        // Debug: Bakiye bilgilerini logla
+        error_log("DEBUG - Para Çekme Onaylama: User ID: {$withdrawal['user_id']}, Mevcut Bakiye: {$user_balance}, Çekilecek Tutar: {$withdrawal['tutar']}");
+        
         if ($user_balance < $withdrawal['tutar']) {
             echo json_encode(['error' => 'Kullanıcının yeterli bakiyesi yok']);
             exit;
@@ -121,7 +124,15 @@ switch ($action) {
             $stmt = $conn->prepare($sql);
             $stmt->execute([$withdrawal['tutar'], $withdrawal['user_id']]);
             
-            // İşlem geçmişine ekle
+            // Debug: Bakiye güncelleme sonrası kontrol
+            $new_balance_sql = "SELECT balance FROM users WHERE id = ?";
+            $new_balance_stmt = $conn->prepare($new_balance_sql);
+            $new_balance_stmt->execute([$withdrawal['user_id']]);
+            $new_balance = $new_balance_stmt->fetchColumn();
+            
+            error_log("DEBUG - Bakiye Güncelleme: Eski Bakiye: {$user_balance}, Çekilen Tutar: {$withdrawal['tutar']}, Yeni Bakiye: {$new_balance}");
+            
+            // İşlem geçmişine ekle - Para çekme için tutar negatif olmalı
             $sql = "INSERT INTO kullanici_islem_gecmisi 
                     (user_id, islem_tipi, islem_detayi, tutar, onceki_bakiye, sonraki_bakiye) 
                     VALUES (?, 'para_cekme', ?, ?, ?, ?)";
@@ -129,9 +140,9 @@ switch ($action) {
             $stmt->execute([
                 $withdrawal['user_id'],
                 "Para çekme onaylandı - {$withdrawal['yontem']}",
-                $withdrawal['tutar'],
+                -$withdrawal['tutar'], // Negatif değer olarak kaydet
                 $user_balance,
-                $user_balance - $withdrawal['tutar']
+                $new_balance
             ]);
             
             // Admin log kaydı
