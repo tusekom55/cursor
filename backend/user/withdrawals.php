@@ -1,5 +1,13 @@
 <?php
-session_start();
+// Session yönetimi - çakışma önleme
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Session timeout süresini uzat (2 saat)
+ini_set('session.gc_maxlifetime', 7200);
+ini_set('session.cookie_lifetime', 7200);
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -12,14 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once '../config.php';
 
-// Session kontrolü
+// Session kontrolü - daha esnek
 if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'error' => 'Oturum bulunamadı']);
-    exit;
+    // Debug modunda test kullanıcısı kullan
+    if (defined('DEBUG_MODE') && DEBUG_MODE) {
+        $_SESSION['user_id'] = 1;
+        $_SESSION['role'] = 'user';
+        $_SESSION['username'] = 'test_user';
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Oturum bulunamadı']);
+        exit;
+    }
 }
 
 $user_id = $_SESSION['user_id'];
 $action = $_GET['action'] ?? '';
+
+// Session'ı yenile - timeout'u önle
+if (isset($_SESSION['user_id'])) {
+    $_SESSION['last_activity'] = time();
+}
 
 try {
     // Config.php'deki db_connect fonksiyonunu kullan
@@ -155,6 +175,12 @@ try {
 
             if ($result) {
                 $withdrawal_id = $pdo->lastInsertId();
+                
+                // Session'ı güçlendir - para çekme işleminden sonra
+                if (isset($_SESSION['user_id'])) {
+                    $_SESSION['last_activity'] = time();
+                    $_SESSION['last_withdrawal'] = time();
+                }
                 
                 echo json_encode([
                     'success' => true, 

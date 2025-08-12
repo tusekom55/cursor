@@ -2393,6 +2393,24 @@
                     document.getElementById('withdrawal-form').reset();
                     toggleWithdrawalMethodFields(''); // Hide all method fields
                     loadRecentWithdrawals(); // Reload recent withdrawals
+                    
+                    // Para çekme işleminden sonra session kontrolü yap - daha esnek
+                    setTimeout(async () => {
+                        try {
+                            const sessionValid = await checkAuthSession();
+                            if (!sessionValid) {
+                                console.warn('⚠️ Para çekme işleminden sonra session kontrolü başarısız');
+                                // Session yenileme denemesi yap
+                                await refreshSession();
+                            } else {
+                                console.log('✅ Para çekme işleminden sonra session kontrolü başarılı');
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ Session kontrol hatası:', error);
+                            // Hata durumunda session yenileme dene
+                            await refreshSession();
+                        }
+                    }, 2000);
                 } else {
                     showNotification('Hata: ' + (data.error || 'Talep gönderilemedi'), 'error');
                 }
@@ -6951,7 +6969,32 @@
             }
         }
 
-        // Session kontrolü
+        // Session yenileme fonksiyonu
+        async function refreshSession() {
+            try {
+                console.log('🔄 Session yenileniyor...');
+                const response = await fetch('backend/public/profile.php', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.user) {
+                        console.log('✅ Session yenilendi:', data.user.username);
+                        return true;
+                    }
+                }
+                
+                console.warn('⚠️ Session yenilenemedi');
+                return false;
+            } catch (error) {
+                console.error('Session yenileme hatası:', error);
+                return false;
+            }
+        }
+
+        // Session kontrolü - Güçlendirilmiş
         async function checkAuthSession() {
             try {
                 const response = await fetch('backend/public/profile.php', {
@@ -6961,13 +7004,54 @@
                 
                 if (data.success && data.user) {
                     console.log('🔐 Session aktif:', data.user.username);
+                    // Demo kullanıcı kontrolü
+                    if (data.user.username === 'demo' || data.user.role === 'demo') {
+                        console.warn('⚠️ Demo kullanıcı tespit edildi - login sayfasına yönlendiriliyor');
+                        showNotification('Demo kullanıcı oturumu sonlandırıldı. Lütfen tekrar giriş yapın.', 'warning');
+                        setTimeout(() => {
+                            window.location.href = 'login.html';
+                        }, 2000);
+                        return false;
+                    }
                     return true;
                 } else {
-                    console.warn('⚠️ Session bulunamadı - giriş yapın!');
+                    // Demo kullanıcı engellendi kontrolü
+                    if (data.demo_blocked) {
+                        console.warn('⚠️ Demo kullanıcı erişimi engellendi - login sayfasına yönlendiriliyor');
+                        showNotification('Demo kullanıcı erişimi engellendi. Lütfen gerçek hesabınızla giriş yapın.', 'error');
+                        setTimeout(() => {
+                            window.location.href = 'login.html';
+                        }, 2000);
+                        return false;
+                    }
+                    
+                    console.warn('⚠️ Session bulunamadı - session yenileme deneniyor');
+                    // Session yenileme denemesi yap
+                    const refreshed = await refreshSession();
+                    if (refreshed) {
+                        console.log('✅ Session yenilendi');
+                        return true;
+                    }
+                    
+                    showNotification('Oturum süresi doldu. Lütfen tekrar giriş yapın.', 'warning');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 2000);
                     return false;
                 }
             } catch (error) {
                 console.error('Session kontrol hatası:', error);
+                // Hata durumunda session yenileme dene
+                const refreshed = await refreshSession();
+                if (refreshed) {
+                    console.log('✅ Session yenilendi');
+                    return true;
+                }
+                
+                showNotification('Oturum kontrolünde hata oluştu. Lütfen tekrar giriş yapın.', 'error');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 2000);
                 return false;
             }
         }
@@ -7120,10 +7204,40 @@
         // Sayfa yüklendiğinde kaldıraç sistemini başlat
         document.addEventListener('DOMContentLoaded', function() {
             initTradingModal();
-            checkAuthSession();
             
-            // Portföy-Piyasalar entegrasyonu için event listener'lar ekle
-            setupPortfolioIntegration();
+            // İlk session kontrolü - demo kullanıcı tespit edilirse hemen yönlendir
+            checkAuthSession().then(sessionValid => {
+                if (!sessionValid) {
+                    console.warn('⚠️ Sayfa yüklendiğinde session kontrolü başarısız');
+                    // Demo kullanıcı tespit edildiyse hemen yönlendir
+                    if (sessionValid === false) {
+                        showNotification('Demo kullanıcı tespit edildi. Login sayfasına yönlendiriliyorsunuz.', 'error');
+                        setTimeout(() => {
+                            window.location.href = 'login.html';
+                        }, 1500);
+                        return; // Diğer işlemleri yapma
+                    }
+                }
+                
+                // Session geçerliyse diğer işlemleri başlat
+                // Portföy-Piyasalar entegrasyonu için event listener'lar ekle
+                setupPortfolioIntegration();
+                
+                // Periyodik session kontrolü (her 5 dakikada bir)
+                setInterval(async () => {
+                    const sessionValid = await checkAuthSession();
+                    if (!sessionValid) {
+                        console.warn('⚠️ Periyodik session kontrolü başarısız');
+                        // Demo kullanıcı tespit edildiyse hemen yönlendir
+                        if (sessionValid === false) {
+                            showNotification('Güvenlik kontrolü başarısız. Login sayfasına yönlendiriliyorsunuz.', 'error');
+                            setTimeout(() => {
+                                window.location.href = 'login.html';
+                            }, 1500);
+                        }
+                    }
+                }, 5 * 60 * 1000); // 5 dakika
+            });
         });
         
         // Portföy ve piyasalar arasındaki entegrasyonu kur

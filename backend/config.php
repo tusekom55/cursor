@@ -4,6 +4,15 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Session timeout süresini uzat (2 saat)
+ini_set('session.gc_maxlifetime', 7200);
+ini_set('session.cookie_lifetime', 7200);
+
+// Session'ı güçlendir
+if (isset($_SESSION['user_id'])) {
+    $_SESSION['last_activity'] = time();
+}
+
 // Veritabanı bağlantı ayarları
 $DB_HOST = 'localhost';
 $DB_USER = 'u225998063_yenip';
